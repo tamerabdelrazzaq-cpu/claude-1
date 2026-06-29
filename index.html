@@ -108,6 +108,21 @@
   </div>
 
   <div class="section">
+    <h2>Pins (metal)</h2>
+    <label class="toggle"><input type="checkbox" id="pinsOn" checked /> Show front &amp; back pins</label>
+    <div class="row">
+      <label class="field">Front pin</label>
+      <input type="color" id="frontPinColor" value="#16181d" />
+      <input type="text" id="frontPinHex" value="#16181D" maxlength="7" />
+    </div>
+    <div class="row">
+      <label class="field">Back pin</label>
+      <input type="color" id="backPinColor" value="#e6e9ee" />
+      <input type="text" id="backPinHex" value="#E6E9EE" maxlength="7" />
+    </div>
+  </div>
+
+  <div class="section">
     <h2>View</h2>
     <label class="toggle"><input type="checkbox" id="autoSpin" /> Auto-rotate 360°</label>
     <button class="btn ghost" id="resetView">Reset view</button>
@@ -372,6 +387,18 @@ brimHex.addEventListener('change',e=>{
   if(/^#[0-9a-fA-F]{6}$/.test(v)){ setBrimColor(v); brimColor.value=v; }
 });
 
+/* Pin controls (front + back metal colors) */
+const pinsOnEl=document.getElementById('pinsOn');
+pinsOnEl.addEventListener('change',e=>setPinsVisible(e.target.checked));
+function bindPin(colorId, hexId, setter){
+  const col=document.getElementById(colorId), hex=document.getElementById(hexId);
+  const apply=(v)=>{ setter(v); col.value=v; hex.value=v.toUpperCase(); };
+  col.addEventListener('input',e=>apply(e.target.value));
+  hex.addEventListener('change',e=>{ let v=e.target.value.trim(); if(!v.startsWith('#'))v='#'+v; if(/^#[0-9a-fA-F]{6}$/.test(v)) apply(v); });
+}
+bindPin('frontPinColor','frontPinHex', setFrontPinColor);
+bindPin('backPinColor','backPinHex', setBackPinColor);
+
 /* View controls */
 document.getElementById('autoSpin').addEventListener('change',e=>controls.autoRotate=e.target.checked);
 document.getElementById('resetView').addEventListener('click',()=>{
@@ -383,6 +410,57 @@ document.getElementById('snapshot').addEventListener('click',()=>{
   a.download=`hat-${currentMaterial}-${colorPicker.value.replace('#','')}.png`;
   a.href=renderer.domElement.toDataURL('image/png'); a.click();
 });
+
+/* ---------- Pins (the cap model's OWN embossed brand logos) ---------- */
+let frontPinHex = '#16181d';          // front DICION badge: dark metal
+let backPinHex  = '#e6e9ee';          // back monogram: polished silver
+let pinsVisible = true;
+const pinMeshes = [];                 // built-in logo meshes (for show/hide)
+let frontPinMat = null, backPinMat = null;
+
+function makePinMat(hex){
+  return new THREE.MeshStandardMaterial({
+    color:new THREE.Color(hex), emissive:new THREE.Color(hex).multiplyScalar(0.10),
+    metalness:0.55, roughness:0.3, envMapIntensity:1.7
+  });
+}
+
+/* Turn the embossed-logo mesh into raised metal: a dark finish on the front
+   badge and a polished-silver finish on the back monogram. The two logos sit
+   at opposite ends of the cap, so split the mesh by triangle Z
+   (front of cap = -Z) and give each half its own material. */
+function makeLogoMetal(mesh){
+  const src = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry;
+  const pos = src.attributes.position, nor = src.attributes.normal;
+  src.computeBoundingBox();
+  const zc = (src.boundingBox.min.z + src.boundingBox.max.z) / 2;
+  const triN = pos.count/3, seqFront=[], seqBack=[];
+  for(let t=0;t<triN;t++){
+    const z = (pos.getZ(t*3)+pos.getZ(t*3+1)+pos.getZ(t*3+2))/3;
+    (z < zc ? seqFront : seqBack).push(t);
+  }
+  const seq=[...seqFront, ...seqBack];
+  const P=new Float32Array(pos.count*3), N=nor?new Float32Array(pos.count*3):null;
+  for(let i=0;i<seq.length;i++){ const t=seq[i];
+    for(let k=0;k<3;k++){ const s=(t*3+k)*3, d=(i*3+k)*3;
+      P[d]=pos.array[s]; P[d+1]=pos.array[s+1]; P[d+2]=pos.array[s+2];
+      if(N){ N[d]=nor.array[s]; N[d+1]=nor.array[s+1]; N[d+2]=nor.array[s+2]; } } }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(P,3));
+  if(N) g.setAttribute('normal', new THREE.BufferAttribute(N,3)); else g.computeVertexNormals();
+  g.addGroup(0, seqFront.length*3, 0);
+  g.addGroup(seqFront.length*3, seqBack.length*3, 1);
+  frontPinMat = makePinMat(frontPinHex);
+  backPinMat  = makePinMat(backPinHex);
+  mesh.geometry = g;
+  mesh.material = [frontPinMat, backPinMat];
+  mesh.castShadow = true;
+  mesh.visible = pinsVisible;
+  pinMeshes.push(mesh);
+}
+function setFrontPinColor(hex){ frontPinHex=hex; if(frontPinMat){ frontPinMat.color.set(hex); frontPinMat.emissive.set(hex).multiplyScalar(0.10); } }
+function setBackPinColor(hex){ backPinHex=hex; if(backPinMat){ backPinMat.color.set(hex); backPinMat.emissive.set(hex).multiplyScalar(0.10); } }
+function setPinsVisible(v){ pinsVisible=v; for(const m of pinMeshes) m.visible=v; }
 
 /* ---------- Custom GLB loading ---------- */
 const loader=new GLTFLoader();
@@ -400,17 +478,26 @@ function loadGLBFromURL(url){
     const scale=2.2/Math.max(size.x,size.y,size.z);
     loadedModel.scale.setScalar(scale);
     loadedModel.position.sub(center.multiplyScalar(scale));
-    loadedModel.traverse(o=>{
-      if(o.isMesh){
-        o.castShadow=true; o.receiveShadow=true;
+    /* The cap model bakes its brand logos in as a separate, much smaller
+       mesh. Give that mesh raised-metal materials (the built-in pins); give
+       the larger fabric mesh(es) the recolorable cap material. */
+    pinMeshes.length = 0; frontPinMat = null; backPinMat = null;
+    const meshList=[]; loadedModel.traverse(o=>{ if(o.isMesh) meshList.push(o); });
+    let maxVol=0; const volOf=new Map();
+    for(const o of meshList){ const b=new THREE.Box3().setFromObject(o); const s=b.getSize(new THREE.Vector3()); const v=s.x*s.y*s.z; volOf.set(o,v); maxVol=Math.max(maxVol,v); }
+    for(const o of meshList){
+      o.castShadow=true; o.receiveShadow=true;
+      if(meshList.length>1 && volOf.get(o) < 0.20*maxVol){
+        makeLogoMetal(o);                     // built-in embossed logo -> metal pins
+      }else{
         const m=new THREE.MeshPhysicalMaterial({ color:new THREE.Color(colorPicker.value) });
         o.material=m; customMats.push(m);
       }
-    });
+    }
     hatGroup.add(loadedModel);
     applyMaterial(currentMaterial);
     setMainColor(colorPicker.value);
-    window.__modelLoaded = { meshes: customMats.length, size:[size.x,size.y,size.z] };
+    window.__modelLoaded = { meshes: customMats.length, pinMeshes: pinMeshes.length, size:[size.x,size.y,size.z] };
   }, undefined, err=>{ console.error(err); alert('Could not load that model. Make sure it is a valid .glb/.gltf file.'); });
 }
 document.getElementById('glbInput').addEventListener('change',e=>{
@@ -445,6 +532,14 @@ function animate(){
   renderer.render(scene,camera);
 }
 animate();
+
+/* dev/test helper: orbit camera to an azimuth (radians) around the cap */
+window.__view = (az, elev=0.18, dist=4.2, ty=null)=>{
+  if(ty!==null) controls.target.set(0,ty,0);
+  const t=controls.target;
+  camera.position.set(t.x+Math.sin(az)*dist, t.y+elev*dist, t.z+Math.cos(az)*dist);
+  controls.update();
+};
 
 /* Hide loader */
 const loadingEl=document.getElementById('loading');

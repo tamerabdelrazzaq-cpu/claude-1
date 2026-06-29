@@ -15,6 +15,9 @@ install — just open the file.
 - **Material switching** — Cotton, Denim, Wool felt, Leather, Satin, Nylon, Suede. Each
   changes how the surface reflects light (roughness / sheen / clearcoat), not just the color.
 - **Two-tone** — give the brim its own color.
+- **Metal brand pins** — the cap's built-in embossed logos (front "DICION SPECIAL"
+  badge + back "EƎ" monogram) render as raised metal, with independent front/back
+  colour pickers (default: dark front, polished-silver back) and a show/hide toggle.
 - **Save image (PNG)** — export the current design for your store/catalog.
 - **Load your own model** — drop in a `.glb`/`.gltf` file (e.g. a real 3D scan made from your
   hat photos) and all the color & material controls apply to it.
