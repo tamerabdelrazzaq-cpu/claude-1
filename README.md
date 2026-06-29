@@ -35,7 +35,21 @@ window open while you use the app; close it to stop.** It needs **Python** *or* 
 (Python comes pre-installed on macOS / most Linux; on Windows, get it free from
 <https://www.python.org/>).
 
-### Run it manually (alternative)
+### macOS: if double-click doesn't work
+
+If you downloaded a **ZIP** (instead of `git clone`), macOS removes the launcher's "run"
+permission, so `start.command` may open in TextEdit. Two easy fixes:
+
+- **Re-enable it once:** right-click `start.command` → **Open** (and confirm), or in Terminal run
+  `chmod +x start.command` once.
+- **Or skip the launcher entirely** (always works):
+  1. Open the **Terminal** app (press ⌘+Space, type "Terminal", Enter).
+  2. Type `cd ` (with a trailing space), then **drag the unzipped project folder** onto the
+     Terminal window and press **Enter**.
+  3. Paste `python3 -m http.server 8080` and press **Enter**.
+  4. Open your browser to **http://localhost:8080/**. (Keep Terminal open; press ⌘+C to stop.)
+
+### Run it manually (Windows / Linux alternative)
 
 ```bash
 cd hatstudio
