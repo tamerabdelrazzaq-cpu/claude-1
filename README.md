@@ -1,8 +1,8 @@
 # HatStudio — 3D Hat Customizer
 
 A browser-based 3D hat customizer for showcasing one hat model in any color and material.
-Built with [Three.js](https://threejs.org/). No build step, no server, no dependencies to
-install — just open the file.
+Built with [Three.js](https://threejs.org/). No build step and no dependencies to install —
+just launch it with the included one-click starter (see **Run it** below).
 
 ## Features
 
@@ -22,20 +22,29 @@ install — just open the file.
 - **Load your own model** — drop in a `.glb`/`.gltf` file (e.g. a real 3D scan made from your
   hat photos) and all the color & material controls apply to it.
 
-## Run it
+## Run it (easiest — double-click)
 
-It's a single static file. Either:
+The app must be **served by a small local web server** (browsers block 3D-model loading from a
+bare `file://` page), so don't just double-click `index.html`. Instead:
 
-- **Double-click `index.html`** to open it in your browser, or
-- Serve the folder (recommended, avoids any browser file restrictions):
+- **macOS / Linux:** double-click **`start.command`**
+- **Windows:** double-click **`start.bat`**
 
-  ```bash
-  python3 -m http.server 8000
-  # then open http://localhost:8000
-  ```
+A small terminal window opens and your browser launches at `http://localhost:8080/`. **Leave that
+window open while you use the app; close it to stop.** It needs **Python** *or* **Node** installed
+(Python comes pre-installed on macOS / most Linux; on Windows, get it free from
+<https://www.python.org/>).
 
-Three.js is vendored locally in `vendor/three/`, so the app needs **no internet connection**
-and no CDN — it runs fully offline.
+### Run it manually (alternative)
+
+```bash
+cd hatstudio
+python3 -m http.server 8080
+# then open http://localhost:8080/
+```
+
+Three.js and the cap model are bundled in the folder, so the app runs **fully offline** — no
+internet and no CDN needed.
 
 ## How the cap model was made
 
