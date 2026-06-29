@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hat Studio — 3D Hat Customizer</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#171c24; --panel2:#1f2630; --line:#2b3441;
+    --text:#e7ecf3; --muted:#9aa7b6; --accent:#6ea8fe; --accent2:#2c7be5;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
+
+  /* Top bar */
+  .topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:12px;
+    padding:14px 18px;pointer-events:none;z-index:5}
+  .brand{font-weight:700;letter-spacing:.3px;font-size:18px}
+  .brand span{color:var(--accent)}
+  .hint{margin-left:auto;font-size:12px;color:var(--muted);pointer-events:none;
+    background:rgba(23,28,36,.6);padding:6px 10px;border-radius:999px;backdrop-filter:blur(6px)}
+
+  /* Control panel */
+  .panel{position:absolute;top:64px;right:18px;width:300px;max-height:calc(100% - 84px);
+    overflow-y:auto;background:rgba(23,28,36,.86);backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:var(--radius);padding:16px;z-index:6;
+    box-shadow:0 20px 50px rgba(0,0,0,.45)}
+  .panel h2{margin:0 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+  .section{padding:14px 0;border-bottom:1px solid var(--line)}
+  .section:last-child{border-bottom:none}
+  .row{display:flex;align-items:center;gap:10px;margin-top:10px}
+  label.field{font-size:13px;color:var(--muted);min-width:64px}
+
+  /* Swatches */
+  .swatches{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:10px}
+  .swatch{aspect-ratio:1;border-radius:7px;border:2px solid transparent;cursor:pointer;
+    transition:transform .08s ease, border-color .08s ease}
+  .swatch:hover{transform:scale(1.08)}
+  .swatch.active{border-color:#fff}
+
+  input[type=color]{width:42px;height:34px;padding:0;border:1px solid var(--line);
+    border-radius:8px;background:var(--panel2);cursor:pointer}
+  input[type=text]{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:8px 10px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+
+  /* Material chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .chip{font-size:12.5px;padding:7px 11px;border-radius:999px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);cursor:pointer;transition:.08s}
+  .chip:hover{border-color:var(--accent)}
+  .chip.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+
+  /* Toggles / buttons */
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin-top:12px}
+  .toggle input{width:16px;height:16px;accent-color:var(--accent2)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    background:var(--accent2);color:#fff;border:none;border-radius:10px;padding:11px;font-size:13.5px;
+    font-weight:600;cursor:pointer;margin-top:10px;transition:.1s}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:var(--panel2);border:1px solid var(--line)}
+  .filewrap{position:relative;overflow:hidden}
+  .filewrap input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+
+  /* Loading */
+  #loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:var(--bg);z-index:20;color:var(--muted);font-size:14px;transition:opacity .4s;flex-direction:column;gap:14px}
+  .spinner{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="loading"><div class="spinner"></div><div>Loading Hat Studio…</div></div>
+
+<div class="topbar">
+  <div class="brand">Hat<span>Studio</span></div>
+  <div class="hint">Drag to rotate · Scroll to zoom · Right-drag to pan</div>
+</div>
+
+<div class="panel">
+  <div class="section">
+    <h2>Color</h2>
+    <div class="swatches" id="swatches"></div>
+    <div class="row">
+      <input type="color" id="colorPicker" value="#2c7be5" />
+      <input type="text" id="hexInput" value="#2C7BE5" maxlength="7" />
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Material</h2>
+    <div class="chips" id="materials"></div>
+  </div>
+
+  <div class="section">
+    <h2>Two-tone brim</h2>
+    <label class="toggle"><input type="checkbox" id="twoTone" /> Use a separate brim color</label>
+    <div class="row" id="brimRow" style="display:none">
+      <input type="color" id="brimColor" value="#11151c" />
+      <input type="text" id="brimHex" value="#11151C" maxlength="7" />
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>View</h2>
+    <label class="toggle"><input type="checkbox" id="autoSpin" /> Auto-rotate 360°</label>
+    <button class="btn ghost" id="resetView">Reset view</button>
+    <button class="btn" id="snapshot">Save image (PNG)</button>
+  </div>
+
+  <div class="section">
+    <h2>Custom model</h2>
+    <button class="btn ghost filewrap">Load your own .glb model
+      <input type="file" id="glbInput" accept=".glb,.gltf" />
+    </button>
+    <p class="note">Have a real 3D scan/model of your hat (from your photos)? Drop the .glb here and the color &amp; material controls will apply to it. Otherwise the built-in cap model is used.</p>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+/* ---------- Scene ---------- */
+const app = document.getElementById('app');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0e1116');
+
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth/window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.1, 5);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+
+/* Environment for realistic PBR reflections */
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+/* Lights */
+const hemi = new THREE.HemisphereLight('#ffffff', '#3a4250', 0.55);
+scene.add(hemi);
+const key = new THREE.DirectionalLight('#ffffff', 2.2);
+key.position.set(4, 7, 5);
+key.castShadow = true;
+key.shadow.mapSize.set(2048,2048);
+key.shadow.camera.near = 1; key.shadow.camera.far = 25;
+key.shadow.camera.left=-6; key.shadow.camera.right=6; key.shadow.camera.top=6; key.shadow.camera.bottom=-6;
+key.shadow.bias = -0.0002;
+scene.add(key);
+const fill = new THREE.DirectionalLight('#cfe0ff', 0.5);
+fill.position.set(-5, 2, -3);
+scene.add(fill);
+
+/* Ground (shadow catcher) */
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(8, 64),
+  new THREE.ShadowMaterial({ opacity:0.28 })
+);
+ground.rotation.x = -Math.PI/2;
+ground.position.y = -0.95;
+ground.receiveShadow = true;
+scene.add(ground);
+
+/* Controls — 360° rotation */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 2.5;
+controls.maxDistance = 9;
+controls.target.set(0, 0.25, 0);
+controls.autoRotateSpeed = 2.2;
+
+/* ---------- Hat model (procedural baseball cap) ---------- */
+const hatGroup = new THREE.Group();
+scene.add(hatGroup);
+
+const crownMat = new THREE.MeshPhysicalMaterial({ color:'#2c7be5', roughness:0.85, metalness:0 });
+const brimMat  = crownMat.clone();
+const bandMat  = crownMat.clone();
+const buttonMat= crownMat.clone();
+const customMats = []; // for loaded glb meshes
+
+/* Crown: flattened hemisphere */
+const crownGeo = new THREE.SphereGeometry(1, 64, 48, 0, Math.PI*2, 0, Math.PI/2);
+crownGeo.scale(1.04, 0.92, 1.0);
+const crown = new THREE.Mesh(crownGeo, crownMat);
+crown.castShadow = true; crown.receiveShadow = true;
+hatGroup.add(crown);
+
+/* Base band: short cylinder skirt below the crown */
+const bandGeo = new THREE.CylinderGeometry(1.0, 1.0, 0.16, 64, 1, true);
+bandGeo.scale(1.04, 1, 1.0);
+const band = new THREE.Mesh(bandGeo, bandMat);
+band.position.y = -0.08;
+band.castShadow = true; band.receiveShadow = true;
+hatGroup.add(band);
+
+/* Button on top */
+const button = new THREE.Mesh(new THREE.SphereGeometry(0.075, 24, 24), buttonMat);
+button.position.y = 0.92;
+button.castShadow = true;
+hatGroup.add(button);
+
+/* Brim: curved solid with thickness, sweeping the front arc */
+function buildBrim(){
+  const nU = 90, nV = 26;
+  const thetaMax = 1.22, rInner = 0.9, rOuter = 1.78, baseY = -0.02, thick = 0.05;
+  const rows = nV+1, cols = nU+1;
+  const pos = [];
+  function P(i,j,layer){
+    const u=i/nU, v=j/nV;
+    const theta = THREE.MathUtils.lerp(-thetaMax, thetaMax, u);
+    const r = THREE.MathUtils.lerp(rInner, rOuter, v);
+    let y = baseY - v*v*0.42;                          // droops downward toward front edge
+    y += Math.pow(theta/thetaMax, 2) * 0.20 * v;        // sides curl up (classic curve)
+    const x = r*Math.sin(theta);
+    const z = r*Math.cos(theta);
+    return [x, y - (layer? thick:0), z];
+  }
+  for(let layer=0; layer<2; layer++)
+    for(let j=0;j<rows;j++)
+      for(let i=0;i<cols;i++){ const p=P(i,j,layer); pos.push(p[0],p[1],p[2]); }
+  const off = rows*cols;
+  const id=(l,i,j)=> l*off + j*cols + i;
+  const idx=[];
+  for(let j=0;j<nV;j++) for(let i=0;i<nU;i++){           // top
+    const a=id(0,i,j),b=id(0,i+1,j),c=id(0,i+1,j+1),d=id(0,i,j+1); idx.push(a,d,c,a,c,b);
+  }
+  for(let j=0;j<nV;j++) for(let i=0;i<nU;i++){           // bottom
+    const a=id(1,i,j),b=id(1,i+1,j),c=id(1,i+1,j+1),d=id(1,i,j+1); idx.push(a,b,c,a,c,d);
+  }
+  for(let i=0;i<nU;i++){                                 // outer edge
+    const t0=id(0,i,nV),t1=id(0,i+1,nV),b0=id(1,i,nV),b1=id(1,i+1,nV); idx.push(t0,t1,b1,t0,b1,b0);
+  }
+  for(let j=0;j<nV;j++){                                 // side edges
+    let t0=id(0,0,j),t1=id(0,0,j+1),b0=id(1,0,j),b1=id(1,0,j+1); idx.push(t0,b0,b1,t0,b1,t1);
+    t0=id(0,nU,j);t1=id(0,nU,j+1);b0=id(1,nU,j);b1=id(1,nU,j+1); idx.push(t0,t1,b1,t0,b1,b0);
+  }
+  for(let i=0;i<nU;i++){                                 // inner edge
+    const t0=id(0,i,0),t1=id(0,i+1,0),b0=id(1,i,0),b1=id(1,i+1,0); idx.push(t0,b1,t1,t0,b0,b1);
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+const brim = new THREE.Mesh(buildBrim(), brimMat);
+brim.castShadow = true; brim.receiveShadow = true;
+hatGroup.add(brim);
+
+const builtInParts = [crown, band, button, brim];
+
+/* ---------- Materials (presets) ---------- */
+const MATERIALS = {
+  'Cotton':   { roughness:0.92, metalness:0.0, clearcoat:0.0, sheen:0.25, sheenRoughness:0.8 },
+  'Denim':    { roughness:0.85, metalness:0.0, clearcoat:0.0, sheen:0.15, sheenRoughness:0.9 },
+  'Wool felt':{ roughness:1.0,  metalness:0.0, clearcoat:0.0, sheen:0.5,  sheenRoughness:0.6 },
+  'Leather':  { roughness:0.42, metalness:0.0, clearcoat:0.35,clearcoatRoughness:0.4, sheen:0.0 },
+  'Satin':    { roughness:0.28, metalness:0.0, clearcoat:0.0, sheen:1.0,  sheenRoughness:0.25 },
+  'Nylon':    { roughness:0.18, metalness:0.05,clearcoat:0.6, clearcoatRoughness:0.25, sheen:0.0 },
+  'Suede':    { roughness:0.97, metalness:0.0, clearcoat:0.0, sheen:0.4,  sheenRoughness:0.9 },
+};
+let currentMaterial = 'Cotton';
+
+function applyMaterial(name){
+  currentMaterial = name;
+  const p = MATERIALS[name];
+  const targets = [crownMat, brimMat, bandMat, buttonMat, ...customMats];
+  for(const m of targets){
+    m.roughness = p.roughness;
+    m.metalness = p.metalness;
+    m.clearcoat = p.clearcoat || 0;
+    m.clearcoatRoughness = p.clearcoatRoughness ?? 0.3;
+    m.sheen = p.sheen || 0;
+    m.sheenRoughness = p.sheenRoughness ?? 0.5;
+    m.sheenColor = new THREE.Color('#ffffff');
+    m.needsUpdate = true;
+  }
+}
+
+/* ---------- Color ---------- */
+let twoTone = false;
+function setMainColor(hex){
+  const c = new THREE.Color(hex);
+  crownMat.color.copy(c);
+  bandMat.color.copy(c);
+  buttonMat.color.copy(c);
+  for(const m of customMats) m.color.copy(c);
+  if(!twoTone) brimMat.color.copy(c);
+}
+function setBrimColor(hex){ brimMat.color.set(hex); }
+
+/* ---------- UI ---------- */
+const SWATCHES = ['#e63946','#f4a261','#ffd166','#2a9d8f','#264653','#2c7be5','#7b2cbf',
+                  '#ff6f91','#000000','#ffffff','#6c757d','#c1121f','#588157','#003049','#d62828','#fca311'];
+const swatchEl = document.getElementById('swatches');
+SWATCHES.forEach(hex=>{
+  const d=document.createElement('div');
+  d.className='swatch'; d.style.background=hex; d.dataset.hex=hex;
+  d.addEventListener('click',()=>chooseColor(hex,true));
+  swatchEl.appendChild(d);
+});
+function markActiveSwatch(hex){
+  [...swatchEl.children].forEach(s=>s.classList.toggle('active', s.dataset.hex.toLowerCase()===hex.toLowerCase()));
+}
+
+const colorPicker=document.getElementById('colorPicker');
+const hexInput=document.getElementById('hexInput');
+function chooseColor(hex, fromSwatch){
+  setMainColor(hex);
+  colorPicker.value=hex;
+  hexInput.value=hex.toUpperCase();
+  markActiveSwatch(hex);
+}
+colorPicker.addEventListener('input',e=>chooseColor(e.target.value));
+hexInput.addEventListener('change',e=>{
+  let v=e.target.value.trim(); if(!v.startsWith('#')) v='#'+v;
+  if(/^#[0-9a-fA-F]{6}$/.test(v)) chooseColor(v);
+});
+
+/* Material chips */
+const matEl=document.getElementById('materials');
+Object.keys(MATERIALS).forEach((name,i)=>{
+  const c=document.createElement('div');
+  c.className='chip'+(i===0?' active':''); c.textContent=name;
+  c.addEventListener('click',()=>{
+    [...matEl.children].forEach(x=>x.classList.remove('active'));
+    c.classList.add('active'); applyMaterial(name);
+  });
+  matEl.appendChild(c);
+});
+
+/* Two-tone */
+const twoToneEl=document.getElementById('twoTone');
+const brimRow=document.getElementById('brimRow');
+const brimColor=document.getElementById('brimColor');
+const brimHex=document.getElementById('brimHex');
+twoToneEl.addEventListener('change',e=>{
+  twoTone=e.target.checked;
+  brimRow.style.display = twoTone?'flex':'none';
+  if(twoTone) setBrimColor(brimColor.value);
+  else setMainColor(colorPicker.value);
+});
+brimColor.addEventListener('input',e=>{ setBrimColor(e.target.value); brimHex.value=e.target.value.toUpperCase(); });
+brimHex.addEventListener('change',e=>{
+  let v=e.target.value.trim(); if(!v.startsWith('#')) v='#'+v;
+  if(/^#[0-9a-fA-F]{6}$/.test(v)){ setBrimColor(v); brimColor.value=v; }
+});
+
+/* View controls */
+document.getElementById('autoSpin').addEventListener('change',e=>controls.autoRotate=e.target.checked);
+document.getElementById('resetView').addEventListener('click',()=>{
+  camera.position.set(0,1.1,5); controls.target.set(0,0.25,0); controls.update();
+});
+document.getElementById('snapshot').addEventListener('click',()=>{
+  renderer.render(scene,camera);
+  const a=document.createElement('a');
+  a.download=`hat-${currentMaterial}-${colorPicker.value.replace('#','')}.png`;
+  a.href=renderer.domElement.toDataURL('image/png'); a.click();
+});
+
+/* ---------- Custom GLB loading ---------- */
+const loader=new GLTFLoader();
+let loadedModel=null;
+function loadGLBFromURL(url){
+  loader.load(url, gltf=>{
+    if(loadedModel){ hatGroup.remove(loadedModel); }
+    builtInParts.forEach(p=>p.visible=false);
+    customMats.length=0;
+    loadedModel=gltf.scene;
+    // Normalize size & center
+    const box=new THREE.Box3().setFromObject(loadedModel);
+    const size=box.getSize(new THREE.Vector3());
+    const center=box.getCenter(new THREE.Vector3());
+    const scale=2.2/Math.max(size.x,size.y,size.z);
+    loadedModel.scale.setScalar(scale);
+    loadedModel.position.sub(center.multiplyScalar(scale));
+    loadedModel.traverse(o=>{
+      if(o.isMesh){
+        o.castShadow=true; o.receiveShadow=true;
+        const m=new THREE.MeshPhysicalMaterial({ color:new THREE.Color(colorPicker.value) });
+        o.material=m; customMats.push(m);
+      }
+    });
+    hatGroup.add(loadedModel);
+    applyMaterial(currentMaterial);
+    setMainColor(colorPicker.value);
+  }, undefined, err=>{ console.error(err); alert('Could not load that model. Make sure it is a valid .glb/.gltf file.'); });
+}
+document.getElementById('glbInput').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  loadGLBFromURL(URL.createObjectURL(f));
+});
+/* Drag & drop anywhere */
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>{
+  e.preventDefault();
+  const f=e.dataTransfer.files[0];
+  if(f && /\.(glb|gltf)$/i.test(f.name)) loadGLBFromURL(URL.createObjectURL(f));
+});
+
+/* ---------- Init ---------- */
+applyMaterial('Cotton');
+chooseColor('#2c7be5');
+
+/* ---------- Resize & render ---------- */
+window.addEventListener('resize',()=>{
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene,camera);
+}
+animate();
+
+/* Hide loader */
+const loadingEl=document.getElementById('loading');
+loadingEl.style.opacity='0';
+setTimeout(()=>loadingEl.remove(),450);
+</script>
+</body>
+</html>
