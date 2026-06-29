@@ -462,29 +462,6 @@ function setFrontPinColor(hex){ frontPinHex=hex; if(frontPinMat){ frontPinMat.co
 function setBackPinColor(hex){ backPinHex=hex; if(backPinMat){ backPinMat.color.set(hex); backPinMat.emissive.set(hex).multiplyScalar(0.10); } }
 function setPinsVisible(v){ pinsVisible=v; for(const m of pinMeshes) m.visible=v; }
 
-/* ---------- Brim reshaping ---------- */
-function smoothstep(e0,e1,x){ let t=(x-e0)/(e1-e0); t=Math.max(0,Math.min(1,t)); return t*t*(3-2*t); }
-
-/* The base model's visor is far too thick/bulbous. Thin it by squeezing the
-   brim vertices toward a thin mid-plane (and dipping the front tip for a
-   natural curve), masked so the crown is untouched. Operates in the model's
-   local coords: front = -Z, brim sits low (y ~0.06-0.11). */
-const BRIM = { yMid:0.090, thin:0.34, zStart:-0.05, zFull:-0.12, yLow:0.10, yHigh:0.15, dip:0.022 };
-function reshapeBrim(mesh){
-  const pos = mesh.geometry.attributes.position;
-  for(let i=0;i<pos.count;i++){
-    const y=pos.getY(i), z=pos.getZ(i);
-    const w = smoothstep(BRIM.zStart, BRIM.zFull, z) * smoothstep(BRIM.yHigh, BRIM.yLow, y);
-    if(w<=0) continue;
-    const compressed = BRIM.yMid + (y - BRIM.yMid)*BRIM.thin;
-    let ny = y + w*(compressed - y);
-    ny -= w * BRIM.dip * smoothstep(-0.11, -0.20, z);   // dip the front tip down
-    pos.setY(i, ny);
-  }
-  pos.needsUpdate = true;
-  mesh.geometry.computeVertexNormals();
-}
-
 /* ---------- Custom GLB loading ---------- */
 const loader=new GLTFLoader();
 let loadedModel=null;
