@@ -47,6 +47,8 @@
     border-radius:8px;background:var(--panel2);cursor:pointer}
   input[type=text]{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);
     border-radius:8px;padding:8px 10px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+  select{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:8px 10px;font-size:13px;cursor:pointer}
 
   /* Material chips */
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
@@ -111,7 +113,26 @@
   <div class="section">
     <h2>Pins (metal)</h2>
     <label class="toggle"><input type="checkbox" id="pinsOn" checked /> Show front &amp; back pins</label>
-    <label class="toggle"><input type="checkbox" id="diamondsOn" /> 💎 Encrust pins with diamonds</label>
+    <div class="row">
+      <label class="field">💎 Diamonds</label>
+      <select id="diamondTarget">
+        <option value="none">None</option>
+        <option value="left">Back — left E</option>
+        <option value="right">Back — right Ǝ</option>
+        <option value="both">Back — both E's</option>
+        <option value="front">Front badge</option>
+        <option value="all">All pins</option>
+      </select>
+    </div>
+    <div class="row">
+      <label class="field">Cut</label>
+      <select id="diamondCut">
+        <option value="round">Round brilliant</option>
+        <option value="princess">Princess</option>
+        <option value="marquise">Marquise</option>
+        <option value="chandelier">Chandelier</option>
+      </select>
+    </div>
 
     <label class="field pinlabel">Front pin</label>
     <div class="swatches" id="frontPinSwatches"></div>
@@ -404,7 +425,8 @@ brimHex.addEventListener('change',e=>{
    fabric colour picker, so no hex typing needed. */
 const pinsOnEl=document.getElementById('pinsOn');
 pinsOnEl.addEventListener('change',e=>setPinsVisible(e.target.checked));
-document.getElementById('diamondsOn').addEventListener('change',e=>setDiamonds(e.target.checked));
+document.getElementById('diamondTarget').addEventListener('change',e=>setDiamondTarget(e.target.value));
+document.getElementById('diamondCut').addEventListener('change',e=>setDiamondCut(e.target.value));
 const PIN_SWATCHES = ['#e6e9ee','#c9ccd2','#9aa0a6','#5a5e66','#16181d','#000000','#ffffff','#e8b923',
                       '#d4af37','#b87333','#cd7f32','#2c7be5','#c1121f','#2a9d8f','#7b2cbf','#e63946'];
 function bindPin(colorId, hexId, swatchId, setter){
@@ -488,49 +510,79 @@ function makeLogoMetal(mesh){
 }
 function setFrontPinColor(hex){ frontPinHex=hex; if(frontPinMat){ frontPinMat.color.set(hex); frontPinMat.emissive.set(hex).multiplyScalar(0.10); } }
 function setBackPinColor(hex){ backPinHex=hex; if(backPinMat){ backPinMat.color.set(hex); backPinMat.emissive.set(hex).multiplyScalar(0.10); } }
-function setPinsVisible(v){ pinsVisible=v; for(const m of pinMeshes) m.visible=v; if(diamondsGroup) diamondsGroup.visible = v && diamondsOn; }
+function setPinsVisible(v){ pinsVisible=v; for(const m of pinMeshes) m.visible=v; if(diamondsGroup) diamondsGroup.visible = v && diamondTarget!=='none'; }
 
-/* ---------- Diamonds (optional pavé on the pins) ---------- */
-let diamondsOn = false;
+/* ---------- Diamonds (optional pavé on the pins) ----------
+   diamondTarget: none | left (left E) | right (right Ǝ) | both (back) |
+                  front (front badge) | all
+   diamondCut: round | princess | marquise | chandelier */
+let diamondTarget = 'none';
+let diamondCut = 'round';
 let diamondsGroup = null;
-const DIAMOND = { size:0.012, spacing:0.020, lift:0.007, maxCount:450 };
+const DIAMOND = { size:0.012, spacing:0.020, lift:0.007, maxCount:600 };
+
+function diamondGeometry(cut, s){
+  let g;
+  if(cut==='princess'){ g=new THREE.ConeGeometry(s*1.15, s*1.9, 4); }            // square pyramid
+  else if(cut==='marquise'){ g=new THREE.OctahedronGeometry(s,0); g.scale(2.1,0.9,0.8); } // pointed oval
+  else if(cut==='chandelier'){ g=new THREE.OctahedronGeometry(s,0); g.scale(0.8,2.7,0.8); } // long faceted drop
+  else { g=new THREE.OctahedronGeometry(s,0); g.scale(1,1.3,1); }                 // round brilliant
+  return g;
+}
+
 function buildDiamonds(){
-  if(diamondsGroup){ hatGroup.remove(diamondsGroup); diamondsGroup.traverse(o=>o.geometry&&o.geometry.dispose && o.geometry.dispose()); diamondsGroup=null; }
-  if(!diamondsOn || !pinMeshes.length || !loadedModel) return;
+  if(diamondsGroup){ hatGroup.remove(diamondsGroup); diamondsGroup.traverse(o=>o.geometry&&o.geometry.dispose&&o.geometry.dispose()); diamondsGroup=null; }
+  if(diamondTarget==='none' || !pinMeshes.length || !loadedModel) return;
   scene.updateMatrixWorld(true);
   const capCenter = new THREE.Box3().setFromObject(loadedModel).getCenter(new THREE.Vector3());
+
+  const wantBack  = ['left','right','both','all'].includes(diamondTarget);
+  const wantFront = diamondTarget==='front' || diamondTarget==='all';
+  const isBack = m => m.userData.pinSide!=='front';      // treat unspecified as back
+  const targets = pinMeshes.filter(m => (isBack(m)&&wantBack) || (!isBack(m)&&wantFront));
+  if(!targets.length) return;
+
+  // centre X of the back pins (to split the EƎ into its two characters)
+  let backCx=0;
+  if(['left','right'].includes(diamondTarget)){
+    const bb=new THREE.Box3(); targets.forEach(m=>bb.expandByObject(m)); backCx=bb.getCenter(new THREE.Vector3()).x;
+  }
+
   const pts=[];
   const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();
-  for(const mesh of pinMeshes){
-    const pos=mesh.geometry.attributes.position, mw=mesh.matrixWorld;
-    const triN=pos.count/3;
+  for(const mesh of targets){
+    const pos=mesh.geometry.attributes.position, mw=mesh.matrixWorld, triN=pos.count/3;
     for(let t=0;t<triN;t++){
       a.fromBufferAttribute(pos,t*3).applyMatrix4(mw);
       b.fromBufferAttribute(pos,t*3+1).applyMatrix4(mw);
       c.fromBufferAttribute(pos,t*3+2).applyMatrix4(mw);
       const cen=a.clone().add(b).add(c).multiplyScalar(1/3);
       const n=b.clone().sub(a).cross(c.clone().sub(a)).normalize();
-      const outward=cen.clone().sub(capCenter).normalize();
-      if(n.dot(outward) < 0.5) continue;            // only the raised, outward face
+      if(n.dot(cen.clone().sub(capCenter).normalize()) < 0.5) continue;  // outward face only
+      if(diamondTarget==='left'  && cen.x < backCx) continue;            // left E only (screen-left = +X)
+      if(diamondTarget==='right' && cen.x > backCx) continue;            // right Ǝ only
       pts.push({p:cen, n});
     }
   }
-  // even coverage: greedy minimum-distance thinning
-  const minD2 = DIAMOND.spacing*DIAMOND.spacing, chosen=[];
+  // even coverage via greedy minimum-distance thinning
+  const minD2=DIAMOND.spacing*DIAMOND.spacing, chosen=[];
   for(const pt of pts){
     let ok=true;
     for(let i=0;i<chosen.length;i++){ if(chosen[i].p.distanceToSquared(pt.p)<minD2){ ok=false; break; } }
     if(ok){ chosen.push(pt); if(chosen.length>=DIAMOND.maxCount) break; }
   }
   if(!chosen.length) return;
-  const g=new THREE.OctahedronGeometry(DIAMOND.size,0); g.scale(1,1.3,1);
+
+  const g=diamondGeometry(diamondCut, DIAMOND.size);
   const mat=new THREE.MeshPhysicalMaterial({ color:'#ffffff', metalness:0.0, roughness:0.03,
     clearcoat:1.0, clearcoatRoughness:0.04, ior:2.4, reflectivity:1.0, envMapIntensity:2.8,
     emissive:'#334', emissiveIntensity:0.18, flatShading:true });
   const inst=new THREE.InstancedMesh(g, mat, chosen.length);
-  const up=new THREE.Vector3(0,1,0), q=new THREE.Quaternion(), m4=new THREE.Matrix4(), one=new THREE.Vector3(1,1,1);
+  const up=new THREE.Vector3(0,1,0), q=new THREE.Quaternion(), qr=new THREE.Quaternion(), m4=new THREE.Matrix4(), one=new THREE.Vector3(1,1,1);
   chosen.forEach((pt,i)=>{
     q.setFromUnitVectors(up, pt.n);
+    qr.setFromAxisAngle(pt.n, Math.random()*Math.PI*2);   // random spin for natural sparkle
+    q.premultiply(qr);
     m4.compose(pt.p.clone().add(pt.n.clone().multiplyScalar(DIAMOND.lift)), q, one);
     inst.setMatrixAt(i, m4);
   });
@@ -539,7 +591,8 @@ function buildDiamonds(){
   diamondsGroup.visible = pinsVisible;
   hatGroup.add(diamondsGroup);
 }
-function setDiamonds(v){ diamondsOn=v; buildDiamonds(); }
+function setDiamondTarget(v){ diamondTarget=v; buildDiamonds(); }
+function setDiamondCut(v){ diamondCut=v; buildDiamonds(); }
 
 /* ---------- Model loading ----------
    Default model = Cap1_2 (good brim). Its brand logos are separate meshes:
@@ -564,7 +617,8 @@ function classifyDefaultPins(meshList){
     const back  = c.y < -0.12 && c.z < -0.85 && Math.abs(c.x) < 0.35; // EƎ monogram
     if(front || back){
       o.material = front ? frontPinMat : backPinMat;
-      o.userData.isPin = true; pinMeshes.push(o);
+      o.userData.isPin = true; o.userData.pinSide = front ? 'front' : 'back';
+      pinMeshes.push(o);
       if(back) o.position.y -= BACK_PIN_DROP / loadedModel.scale.x;  // nudge lower
     }else{
       const m=new THREE.MeshPhysicalMaterial({ color:new THREE.Color(colorPicker.value) });
