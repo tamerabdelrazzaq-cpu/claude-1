@@ -541,14 +541,42 @@ function buildDiamonds(){
 }
 function setDiamonds(v){ diamondsOn=v; buildDiamonds(); }
 
-/* ---------- Model loading ---------- */
+/* ---------- Model loading ----------
+   Default model = Cap1_2 (good brim). Its brand logos are separate meshes:
+   the front "DICION" badge sits low on the front-right (+Z, +X) and the back
+   "EƎ" monogram low on the back-centre (-Z). We metal-ize ONLY those by
+   position so the pin colour + diamonds affect just the logos — the body,
+   brim, bands and eyelets stay fabric. Coords are in the normalized
+   (fit-to-2.2, centred) space. */
 const loader=new GLTFLoader();
 let loadedModel=null;
-function loadGLBFromURL(url){
+const BACK_PIN_DROP = 0.06;   // lower the back monogram by this much (normalized units)
+function classifyDefaultPins(meshList){
+  pinMeshes.length = 0;
+  frontPinMat = makePinMat(frontPinHex);
+  backPinMat  = makePinMat(backPinHex);
+  loadedModel.updateMatrixWorld(true);
+  const c = new THREE.Vector3();
+  for(const o of meshList){
+    o.castShadow=true; o.receiveShadow=true;
+    new THREE.Box3().setFromObject(o).getCenter(c);
+    const front = c.y < -0.12 && c.z >  0.10 && c.x >  0.35;   // DICION badge
+    const back  = c.y < -0.12 && c.z < -0.85 && Math.abs(c.x) < 0.35; // EƎ monogram
+    if(front || back){
+      o.material = front ? frontPinMat : backPinMat;
+      o.userData.isPin = true; pinMeshes.push(o);
+      if(back) o.position.y -= BACK_PIN_DROP / loadedModel.scale.x;  // nudge lower
+    }else{
+      const m=new THREE.MeshPhysicalMaterial({ color:new THREE.Color(colorPicker.value) });
+      o.material=m; customMats.push(m);
+    }
+  }
+}
+function loadGLBFromURL(url, isDefault){
   loader.load(url, gltf=>{
     if(loadedModel){ hatGroup.remove(loadedModel); }
     builtInParts.forEach(p=>p.visible=false);
-    customMats.length=0;
+    customMats.length=0; pinMeshes.length=0; frontPinMat=null; backPinMat=null;
     loadedModel=gltf.scene;
     const box=new THREE.Box3().setFromObject(loadedModel);
     const size=box.getSize(new THREE.Vector3());
@@ -556,47 +584,45 @@ function loadGLBFromURL(url){
     const scale=2.2/Math.max(size.x,size.y,size.z);
     loadedModel.scale.setScalar(scale);
     loadedModel.position.sub(center.multiplyScalar(scale));
-    /* The cap model bakes its brand logos in as a separate, much smaller mesh.
-       Give that mesh raised-metal materials (the built-in pins); give the
-       larger fabric mesh(es) the recolorable cap material. */
-    pinMeshes.length = 0; frontPinMat = null; backPinMat = null;
     const meshList=[]; loadedModel.traverse(o=>{ if(o.isMesh) meshList.push(o); });
-    let maxVol=0; const volOf=new Map();
-    for(const o of meshList){ const b=new THREE.Box3().setFromObject(o); const s=b.getSize(new THREE.Vector3()); const v=s.x*s.y*s.z; volOf.set(o,v); maxVol=Math.max(maxVol,v); }
-    for(const o of meshList){
-      o.castShadow=true; o.receiveShadow=true;
-      if(meshList.length>1 && volOf.get(o) < 0.20*maxVol){
-        makeLogoMetal(o);                     // built-in embossed logo -> metal pins
-      }else{
-        const m=new THREE.MeshPhysicalMaterial({ color:new THREE.Color(colorPicker.value) });
-        o.material=m; customMats.push(m);
+    if(isDefault){
+      classifyDefaultPins(meshList);
+    }else{
+      // custom upload: detect a small embedded logo mesh -> metal, rest fabric
+      let maxVol=0; const volOf=new Map();
+      for(const o of meshList){ const b=new THREE.Box3().setFromObject(o); const s=b.getSize(new THREE.Vector3()); volOf.set(o,s.x*s.y*s.z); maxVol=Math.max(maxVol,s.x*s.y*s.z); }
+      for(const o of meshList){
+        o.castShadow=true; o.receiveShadow=true;
+        if(meshList.length>1 && volOf.get(o) < 0.20*maxVol){ makeLogoMetal(o); }
+        else { const m=new THREE.MeshPhysicalMaterial({ color:new THREE.Color(colorPicker.value) }); o.material=m; customMats.push(m); }
       }
     }
     hatGroup.add(loadedModel);
     applyMaterial(currentMaterial);
     setMainColor(colorPicker.value);
+    setFrontPinColor(frontPinHex); setBackPinColor(backPinHex); setPinsVisible(pinsVisible);
     buildDiamonds();
     window.__modelLoaded = { meshes: customMats.length, pinMeshes: pinMeshes.length, size:[size.x,size.y,size.z] };
   }, undefined, err=>{ console.error(err); alert('Could not load that model. Make sure it is a valid .glb/.gltf file.'); });
 }
 document.getElementById('glbInput').addEventListener('change',e=>{
   const f=e.target.files[0]; if(!f) return;
-  loadGLBFromURL(URL.createObjectURL(f));
+  loadGLBFromURL(URL.createObjectURL(f), false);
 });
 /* Drag & drop anywhere */
 window.addEventListener('dragover',e=>e.preventDefault());
 window.addEventListener('drop',e=>{
   e.preventDefault();
   const f=e.dataTransfer.files[0];
-  if(f && /\.(glb|gltf)$/i.test(f.name)) loadGLBFromURL(URL.createObjectURL(f));
+  if(f && /\.(glb|gltf)$/i.test(f.name)) loadGLBFromURL(URL.createObjectURL(f), false);
 });
 
 /* ---------- Init ---------- */
 applyMaterial('Cotton');
 chooseColor('#2c7be5');
 
-/* Load the shop's real cap (built-in metal brand pins) by default. */
-loadGLBFromURL('models/cap.glb');
+/* Load the shop's real cap (Cap1_2 — good brim + built-in metal logos). */
+loadGLBFromURL('models/cap.glb', true);
 
 /* ---------- Resize & render ---------- */
 window.addEventListener('resize',()=>{
