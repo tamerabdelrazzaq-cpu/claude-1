@@ -513,7 +513,6 @@ function loadGLBFromURL(url){
       if(meshList.length>1 && volOf.get(o) < 0.20*maxVol){
         makeLogoMetal(o);                     // built-in embossed logo -> metal pins
       }else{
-        reshapeBrim(o);                       // thin & curve the chunky visor
         const m=new THREE.MeshPhysicalMaterial({ color:new THREE.Color(colorPicker.value) });
         o.material=m; customMats.push(m);
       }
