@@ -34,6 +34,7 @@
   .section:last-child{border-bottom:none}
   .row{display:flex;align-items:center;gap:10px;margin-top:10px}
   label.field{font-size:13px;color:var(--muted);min-width:64px}
+  label.pinlabel{display:block;min-width:0;margin:14px 0 6px}
 
   /* Swatches */
   .swatches{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:10px}
@@ -110,13 +111,18 @@
   <div class="section">
     <h2>Pins (metal)</h2>
     <label class="toggle"><input type="checkbox" id="pinsOn" checked /> Show front &amp; back pins</label>
+    <label class="toggle"><input type="checkbox" id="diamondsOn" /> 💎 Encrust pins with diamonds</label>
+
+    <label class="field pinlabel">Front pin</label>
+    <div class="swatches" id="frontPinSwatches"></div>
     <div class="row">
-      <label class="field">Front pin</label>
       <input type="color" id="frontPinColor" value="#16181d" />
       <input type="text" id="frontPinHex" value="#16181D" maxlength="7" />
     </div>
+
+    <label class="field pinlabel">Back pin</label>
+    <div class="swatches" id="backPinSwatches"></div>
     <div class="row">
-      <label class="field">Back pin</label>
       <input type="color" id="backPinColor" value="#e6e9ee" />
       <input type="text" id="backPinHex" value="#E6E9EE" maxlength="7" />
     </div>
@@ -291,14 +297,17 @@ hatGroup.add(brim);
 const builtInParts = [crown, band, button, brim];
 
 /* ---------- Materials (presets) ---------- */
+/* Tuned for a clearly visible range: flat-matte -> glossy -> patent -> metallic. */
 const MATERIALS = {
-  'Cotton':   { roughness:0.92, metalness:0.0, clearcoat:0.0, sheen:0.25, sheenRoughness:0.8 },
-  'Denim':    { roughness:0.85, metalness:0.0, clearcoat:0.0, sheen:0.15, sheenRoughness:0.9 },
-  'Wool felt':{ roughness:1.0,  metalness:0.0, clearcoat:0.0, sheen:0.5,  sheenRoughness:0.6 },
-  'Leather':  { roughness:0.42, metalness:0.0, clearcoat:0.35,clearcoatRoughness:0.4, sheen:0.0 },
-  'Satin':    { roughness:0.28, metalness:0.0, clearcoat:0.0, sheen:1.0,  sheenRoughness:0.25 },
-  'Nylon':    { roughness:0.18, metalness:0.05,clearcoat:0.6, clearcoatRoughness:0.25, sheen:0.0 },
-  'Suede':    { roughness:0.97, metalness:0.0, clearcoat:0.0, sheen:0.4,  sheenRoughness:0.9 },
+  'Cotton':   { roughness:0.95, metalness:0.0, clearcoat:0.0, sheen:0.15, sheenRoughness:0.9, env:1.0 },
+  'Denim':    { roughness:0.80, metalness:0.0, clearcoat:0.0, sheen:0.35, sheenRoughness:0.55, sheenColor:'#9fb3d1', env:1.1 },
+  'Wool felt':{ roughness:1.0,  metalness:0.0, clearcoat:0.0, sheen:0.65, sheenRoughness:0.5, env:0.8 },
+  'Suede':    { roughness:1.0,  metalness:0.0, clearcoat:0.0, sheen:0.3,  sheenRoughness:1.0, env:0.7 },
+  'Leather':  { roughness:0.42, metalness:0.0, clearcoat:0.75, clearcoatRoughness:0.35, sheen:0.0, env:1.5 },
+  'Satin':    { roughness:0.26, metalness:0.0, clearcoat:0.1,  clearcoatRoughness:0.2, sheen:1.0, sheenRoughness:0.18, sheenColor:'#ffffff', env:1.7 },
+  'Nylon':    { roughness:0.13, metalness:0.05, clearcoat:0.9, clearcoatRoughness:0.12, sheen:0.0, env:1.9 },
+  'Patent':   { roughness:0.04, metalness:0.0, clearcoat:1.0,  clearcoatRoughness:0.03, sheen:0.0, env:2.3 },
+  'Metallic': { roughness:0.30, metalness:0.8, clearcoat:0.3,  clearcoatRoughness:0.2, sheen:0.0, env:2.1 },
 };
 let currentMaterial = 'Cotton';
 
@@ -313,7 +322,8 @@ function applyMaterial(name){
     m.clearcoatRoughness = p.clearcoatRoughness ?? 0.3;
     m.sheen = p.sheen || 0;
     m.sheenRoughness = p.sheenRoughness ?? 0.5;
-    m.sheenColor = new THREE.Color('#ffffff');
+    m.sheenColor = new THREE.Color(p.sheenColor || '#ffffff');
+    m.envMapIntensity = p.env ?? 1.0;
     m.needsUpdate = true;
   }
 }
@@ -331,8 +341,11 @@ function setMainColor(hex){
 function setBrimColor(hex){ brimMat.color.set(hex); }
 
 /* ---------- UI ---------- */
-const SWATCHES = ['#e63946','#f4a261','#ffd166','#2a9d8f','#264653','#2c7be5','#7b2cbf',
-                  '#ff6f91','#000000','#ffffff','#6c757d','#c1121f','#588157','#003049','#d62828','#fca311'];
+const SWATCHES = [
+  '#000000','#ffffff','#6c757d','#adb5bd','#343a40','#1b1b1f','#f8f0e3','#d8c3a5',
+  '#c1121f','#e63946','#d62828','#9d0208','#ff6f91','#ff8fab','#e85d75','#7b2cbf',
+  '#f4a261','#fb8500','#fca311','#ffd166','#ffe66d','#588157','#2d6a4f','#1b4332',
+  '#2a9d8f','#0096c7','#2c7be5','#003049','#1d3557','#3a0ca3','#5a189a','#6d4c3d'];
 const swatchEl = document.getElementById('swatches');
 SWATCHES.forEach(hex=>{
   const d=document.createElement('div');
@@ -387,17 +400,32 @@ brimHex.addEventListener('change',e=>{
   if(/^#[0-9a-fA-F]{6}$/.test(v)){ setBrimColor(v); brimColor.value=v; }
 });
 
-/* Pin controls (front + back metal colors) */
+/* Pin controls (front + back metal colors) — same one-click swatches as the
+   fabric colour picker, so no hex typing needed. */
 const pinsOnEl=document.getElementById('pinsOn');
 pinsOnEl.addEventListener('change',e=>setPinsVisible(e.target.checked));
-function bindPin(colorId, hexId, setter){
-  const col=document.getElementById(colorId), hex=document.getElementById(hexId);
-  const apply=(v)=>{ setter(v); col.value=v; hex.value=v.toUpperCase(); };
+document.getElementById('diamondsOn').addEventListener('change',e=>setDiamonds(e.target.checked));
+const PIN_SWATCHES = ['#e6e9ee','#c9ccd2','#9aa0a6','#5a5e66','#16181d','#000000','#ffffff','#e8b923',
+                      '#d4af37','#b87333','#cd7f32','#2c7be5','#c1121f','#2a9d8f','#7b2cbf','#e63946'];
+function bindPin(colorId, hexId, swatchId, setter){
+  const col=document.getElementById(colorId), hex=document.getElementById(hexId), sw=document.getElementById(swatchId);
+  const apply=(v)=>{
+    setter(v); col.value=v; hex.value=v.toUpperCase();
+    [...sw.children].forEach(s=>s.classList.toggle('active', s.dataset.hex.toLowerCase()===v.toLowerCase()));
+  };
   col.addEventListener('input',e=>apply(e.target.value));
   hex.addEventListener('change',e=>{ let v=e.target.value.trim(); if(!v.startsWith('#'))v='#'+v; if(/^#[0-9a-fA-F]{6}$/.test(v)) apply(v); });
+  PIN_SWATCHES.forEach(hx=>{
+    const d=document.createElement('div');
+    d.className='swatch'; d.style.background=hx; d.dataset.hex=hx;
+    d.addEventListener('click',()=>apply(hx));
+    sw.appendChild(d);
+  });
+  // mark the default swatch active (without invoking the setter at load time)
+  [...sw.children].forEach(s=>s.classList.toggle('active', s.dataset.hex.toLowerCase()===col.value.toLowerCase()));
 }
-bindPin('frontPinColor','frontPinHex', setFrontPinColor);
-bindPin('backPinColor','backPinHex', setBackPinColor);
+bindPin('frontPinColor','frontPinHex','frontPinSwatches', setFrontPinColor);
+bindPin('backPinColor','backPinHex','backPinSwatches', setBackPinColor);
 
 /* View controls */
 document.getElementById('autoSpin').addEventListener('change',e=>controls.autoRotate=e.target.checked);
@@ -460,9 +488,60 @@ function makeLogoMetal(mesh){
 }
 function setFrontPinColor(hex){ frontPinHex=hex; if(frontPinMat){ frontPinMat.color.set(hex); frontPinMat.emissive.set(hex).multiplyScalar(0.10); } }
 function setBackPinColor(hex){ backPinHex=hex; if(backPinMat){ backPinMat.color.set(hex); backPinMat.emissive.set(hex).multiplyScalar(0.10); } }
-function setPinsVisible(v){ pinsVisible=v; for(const m of pinMeshes) m.visible=v; }
+function setPinsVisible(v){ pinsVisible=v; for(const m of pinMeshes) m.visible=v; if(diamondsGroup) diamondsGroup.visible = v && diamondsOn; }
 
-/* ---------- Custom GLB loading ---------- */
+/* ---------- Diamonds (optional pavé on the pins) ---------- */
+let diamondsOn = false;
+let diamondsGroup = null;
+const DIAMOND = { size:0.012, spacing:0.020, lift:0.007, maxCount:450 };
+function buildDiamonds(){
+  if(diamondsGroup){ hatGroup.remove(diamondsGroup); diamondsGroup.traverse(o=>o.geometry&&o.geometry.dispose && o.geometry.dispose()); diamondsGroup=null; }
+  if(!diamondsOn || !pinMeshes.length || !loadedModel) return;
+  scene.updateMatrixWorld(true);
+  const capCenter = new THREE.Box3().setFromObject(loadedModel).getCenter(new THREE.Vector3());
+  const pts=[];
+  const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();
+  for(const mesh of pinMeshes){
+    const pos=mesh.geometry.attributes.position, mw=mesh.matrixWorld;
+    const triN=pos.count/3;
+    for(let t=0;t<triN;t++){
+      a.fromBufferAttribute(pos,t*3).applyMatrix4(mw);
+      b.fromBufferAttribute(pos,t*3+1).applyMatrix4(mw);
+      c.fromBufferAttribute(pos,t*3+2).applyMatrix4(mw);
+      const cen=a.clone().add(b).add(c).multiplyScalar(1/3);
+      const n=b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+      const outward=cen.clone().sub(capCenter).normalize();
+      if(n.dot(outward) < 0.5) continue;            // only the raised, outward face
+      pts.push({p:cen, n});
+    }
+  }
+  // even coverage: greedy minimum-distance thinning
+  const minD2 = DIAMOND.spacing*DIAMOND.spacing, chosen=[];
+  for(const pt of pts){
+    let ok=true;
+    for(let i=0;i<chosen.length;i++){ if(chosen[i].p.distanceToSquared(pt.p)<minD2){ ok=false; break; } }
+    if(ok){ chosen.push(pt); if(chosen.length>=DIAMOND.maxCount) break; }
+  }
+  if(!chosen.length) return;
+  const g=new THREE.OctahedronGeometry(DIAMOND.size,0); g.scale(1,1.3,1);
+  const mat=new THREE.MeshPhysicalMaterial({ color:'#ffffff', metalness:0.0, roughness:0.03,
+    clearcoat:1.0, clearcoatRoughness:0.04, ior:2.4, reflectivity:1.0, envMapIntensity:2.8,
+    emissive:'#334', emissiveIntensity:0.18, flatShading:true });
+  const inst=new THREE.InstancedMesh(g, mat, chosen.length);
+  const up=new THREE.Vector3(0,1,0), q=new THREE.Quaternion(), m4=new THREE.Matrix4(), one=new THREE.Vector3(1,1,1);
+  chosen.forEach((pt,i)=>{
+    q.setFromUnitVectors(up, pt.n);
+    m4.compose(pt.p.clone().add(pt.n.clone().multiplyScalar(DIAMOND.lift)), q, one);
+    inst.setMatrixAt(i, m4);
+  });
+  inst.instanceMatrix.needsUpdate=true; inst.castShadow=true;
+  diamondsGroup=new THREE.Group(); diamondsGroup.add(inst);
+  diamondsGroup.visible = pinsVisible;
+  hatGroup.add(diamondsGroup);
+}
+function setDiamonds(v){ diamondsOn=v; buildDiamonds(); }
+
+/* ---------- Model loading ---------- */
 const loader=new GLTFLoader();
 let loadedModel=null;
 function loadGLBFromURL(url){
@@ -471,16 +550,15 @@ function loadGLBFromURL(url){
     builtInParts.forEach(p=>p.visible=false);
     customMats.length=0;
     loadedModel=gltf.scene;
-    // Normalize size & center
     const box=new THREE.Box3().setFromObject(loadedModel);
     const size=box.getSize(new THREE.Vector3());
     const center=box.getCenter(new THREE.Vector3());
     const scale=2.2/Math.max(size.x,size.y,size.z);
     loadedModel.scale.setScalar(scale);
     loadedModel.position.sub(center.multiplyScalar(scale));
-    /* The cap model bakes its brand logos in as a separate, much smaller
-       mesh. Give that mesh raised-metal materials (the built-in pins); give
-       the larger fabric mesh(es) the recolorable cap material. */
+    /* The cap model bakes its brand logos in as a separate, much smaller mesh.
+       Give that mesh raised-metal materials (the built-in pins); give the
+       larger fabric mesh(es) the recolorable cap material. */
     pinMeshes.length = 0; frontPinMat = null; backPinMat = null;
     const meshList=[]; loadedModel.traverse(o=>{ if(o.isMesh) meshList.push(o); });
     let maxVol=0; const volOf=new Map();
@@ -497,6 +575,7 @@ function loadGLBFromURL(url){
     hatGroup.add(loadedModel);
     applyMaterial(currentMaterial);
     setMainColor(colorPicker.value);
+    buildDiamonds();
     window.__modelLoaded = { meshes: customMats.length, pinMeshes: pinMeshes.length, size:[size.x,size.y,size.z] };
   }, undefined, err=>{ console.error(err); alert('Could not load that model. Make sure it is a valid .glb/.gltf file.'); });
 }
@@ -516,8 +595,7 @@ window.addEventListener('drop',e=>{
 applyMaterial('Cotton');
 chooseColor('#2c7be5');
 
-/* Load the shop's real cap model by default (falls back to the built-in
-   procedural cap if the file is missing). */
+/* Load the shop's real cap (built-in metal brand pins) by default. */
 loadGLBFromURL('models/cap.glb');
 
 /* ---------- Resize & render ---------- */
