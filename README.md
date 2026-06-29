@@ -6,8 +6,9 @@ install — just open the file.
 
 ## Features
 
-- **3D baseball cap** modeled procedurally in code (crown, structured curved brim with real
-  thickness, base band, and top button) — no photos required to get started.
+- **Loads your real cap by default** — the app opens with your own 3D cap model
+  (`models/cap.glb`), so it's modeled around your actual hat, not a generic one. A built-in
+  procedural cap is kept only as a fallback if that file is missing.
 - **Full 360° rotation** — drag with the mouse to orbit, scroll to zoom, right-drag to pan.
 - **Auto-rotate** toggle for a turntable showcase.
 - **Any color** — 16 quick swatches, a color picker, or paste a hex code.
@@ -30,8 +31,15 @@ It's a single static file. Either:
   # then open http://localhost:8000
   ```
 
-> Note: Three.js is loaded from a CDN (unpkg), so an internet connection is needed the first
-> time you open it.
+Three.js is vendored locally in `vendor/three/`, so the app needs **no internet connection**
+and no CDN — it runs fully offline.
+
+## How the cap model was made
+
+Your model was supplied as a Blender-exported `.obj` and converted to a web-optimized binary
+`.glb` (`models/cap.glb`). The OBJ's baked materials/textures were dropped on purpose: the app
+applies its own PBR material and color so the hat can be recolored to anything. To swap in a
+new base model, replace `models/cap.glb` (or use the in-app loader for a one-off).
 
 ## About "modeling from photos"
 

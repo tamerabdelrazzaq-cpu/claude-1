@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Hat Studio — 3D Hat Customizer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧢</text></svg>" />
 <style>
   :root{
     --bg:#0e1116; --panel:#171c24; --panel2:#1f2630; --line:#2b3441;
@@ -125,8 +126,8 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
   }
 }
 </script>
@@ -409,6 +410,7 @@ function loadGLBFromURL(url){
     hatGroup.add(loadedModel);
     applyMaterial(currentMaterial);
     setMainColor(colorPicker.value);
+    window.__modelLoaded = { meshes: customMats.length, size:[size.x,size.y,size.z] };
   }, undefined, err=>{ console.error(err); alert('Could not load that model. Make sure it is a valid .glb/.gltf file.'); });
 }
 document.getElementById('glbInput').addEventListener('change',e=>{
@@ -426,6 +428,10 @@ window.addEventListener('drop',e=>{
 /* ---------- Init ---------- */
 applyMaterial('Cotton');
 chooseColor('#2c7be5');
+
+/* Load the shop's real cap model by default (falls back to the built-in
+   procedural cap if the file is missing). */
+loadGLBFromURL('models/cap.glb');
 
 /* ---------- Resize & render ---------- */
 window.addEventListener('resize',()=>{
